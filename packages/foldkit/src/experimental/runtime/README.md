@@ -6,14 +6,16 @@ The browser runtime and this runtime both use `runtime/execution.ts` for Model t
 
 ## Host boundary
 
-A host receives `dispatch(Message)` and `stop()` callbacks, then returns a scoped Effect producing:
+A host receives `dispatch(Message)`, `requestCommit()`, and `stop()` callbacks, then returns a scoped Effect producing:
 
 - `commit(Model)`: synchronously update its render tree from the latest Model.
 - `scheduleCommit(callback)`: schedule an asynchronous callback and return a function that cancels it. Invoke each scheduled callback at most once.
 
 The host owns its view builder, renderable identity, renderer, and input listeners. Acquire resources with `Effect.acquireRelease` inside the host Effect. Foldkit closes that scope on host stop, interruption, or failure.
 
-See `internal/opentui-counter` for an executable host using `@opentui/core`. Its view returns text and the host updates one persistent text renderable. A declarative widget builder and reconciler will live in the eventual adapter package.
+Call `requestCommit()` after a native widget dispatches an edit to restore the latest Model value even if update rejects the edit and keeps the same Model reference. It coalesces with pending Model-driven commits, uses the same cancellation and failure handling, and does not publish a Model transition. The initial commit covers acquisition-time requests. Requests after stop or failure are ignored.
+
+See `internal/opentui-counter` for an executable host using `@opentui/core`. Its view returns text and the host updates one persistent text renderable. `internal/foldkit-opentui` provides the private declarative adapter and an editable-list example.
 
 ## Execution guarantees
 

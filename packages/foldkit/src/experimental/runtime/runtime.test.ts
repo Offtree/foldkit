@@ -135,6 +135,56 @@ afterEach(async () => {
 })
 
 describe('non-browser host runtime', () => {
+  it('coalesces requested commits of unchanged Models and ignores requests during acquisition and after stop', async () => {
+    const harness = makeHarness()
+    const fiber = start({
+      init,
+      update: harness.update,
+      host: controls => {
+        controls.requestCommit()
+        return harness.host(controls)
+      },
+    })
+    await vi.waitFor(() => expect(harness.commits).toHaveLength(1))
+    harness.controls().dispatch(Message.AcquiredHandle())
+    harness.controls().requestCommit()
+    harness.controls().requestCommit()
+    harness.commit()
+    expect(harness.commits).toHaveLength(2)
+    expect(Array.last(harness.commits).pipe(Option.getOrThrow)).toBe(
+      Array.head(harness.commits).pipe(Option.getOrThrow),
+    )
+    expect(() => harness.commit()).toThrow()
+    harness.controls().requestCommit()
+    harness.controls().stop()
+    await Effect.runPromise(Fiber.join(fiber))
+    harness.controls().requestCommit()
+    expect(() => harness.commit()).toThrow()
+    expect(harness.lifecycle).toEqual(['acquired', 'cancelled', 'released'])
+  })
+
+  it('fails the runtime when scheduling an explicit commit throws', async () => {
+    const harness = makeHarness()
+    const fiber = start({
+      init,
+      update,
+      host: controls =>
+        harness.host(controls).pipe(
+          Effect.map(host => ({
+            ...host,
+            scheduleCommit: () => {
+              throw new Error('scheduler failed')
+            },
+          })),
+        ),
+    })
+    await vi.waitFor(() => expect(harness.commits).toHaveLength(1))
+    harness.controls().requestCommit()
+    const exit = await Effect.runPromise(Fiber.await(fiber))
+    expect(Exit.isFailure(exit)).toBe(true)
+    expect(harness.lifecycle).toEqual(['acquired', 'released'])
+  })
+
   it('orders boot events and Command results, batches commits, and drops teardown dispatches', async () => {
     vi.spyOn(performance, 'now').mockReturnValue(0)
     const harness = makeHarness()

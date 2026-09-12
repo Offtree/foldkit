@@ -33,6 +33,10 @@ export type Host<Model> = Readonly<{
  * subsequent dispatches are ignored, including those from host finalizers. */
 export type Controls<Message> = Readonly<{
   dispatch: (message: Message) => void
+  /** Schedule a commit of the latest Model, even if update kept its reference.
+   * Requests coalesce with Model-driven commits. Boot's initial commit covers
+   * acquisition-time requests; requests after stop or failure are ignored. */
+  requestCommit: () => void
   stop: () => void
 }>
 
@@ -118,8 +122,14 @@ export const run = <
           processMessage: message => execution.processMessage(message),
           crashWith,
         })
+        let isHostReady = false
         const host = yield* config.host({
           dispatch: messageQueue.enqueueMessage,
+          requestCommit: () => {
+            if (isHostReady) {
+              scheduleCommit()
+            }
+          },
           stop,
         })
         let maybeCancelCommit = Option.none<() => void>()
@@ -154,6 +164,21 @@ export const run = <
           messageQueue.drainPendingMessages()
         }
 
+        const scheduleCommit = (): void => {
+          if (status.isRuntimeDisposed || status.isCrashed) {
+            return
+          }
+
+          if (Option.isNone(maybeCancelCommit)) {
+            commitNotifier.markCommitPending()
+            try {
+              maybeCancelCommit = Option.some(host.scheduleCommit(commit))
+            } catch (error) {
+              Effect.runSync(crashWith(Cause.die(error)))
+            }
+          }
+        }
+
         const execution = makeExecution<
           Model,
           Message,
@@ -171,14 +196,12 @@ export const run = <
           crashWith,
           onModelChanged: model => {
             PubSub.publishUnsafe(modelPubSub, model)
-            if (Option.isNone(maybeCancelCommit)) {
-              commitNotifier.markCommitPending()
-              maybeCancelCommit = Option.some(host.scheduleCommit(commit))
-            }
+            scheduleCommit()
           },
           recordMessage: Function.constVoid,
         })
 
+        isHostReady = true
         commit()
         if (status.isCrashed || status.isRuntimeDisposed) {
           return yield* Deferred.await(finished)

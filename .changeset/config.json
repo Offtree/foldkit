@@ -45,6 +45,7 @@
     "pixel-art-react-comparison",
     "@foldkit/performance-harness",
     "@foldkit-internal/opentui-counter",
+    "@foldkit-internal/opentui",
     "@foldkit/examples-e2e",
     "@foldkit/lustre-benchmark",
     "charting-example",

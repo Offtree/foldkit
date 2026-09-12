@@ -1,0 +1,4 @@
+{
+  "extends": "../opentui-counter/tsconfig.json",
+  "include": ["src", "example"]
+}

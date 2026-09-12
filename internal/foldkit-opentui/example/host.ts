@@ -1,0 +1,29 @@
+import { Effect, Match } from 'effect'
+
+import type { CliRenderer } from '@opentui/core'
+
+import { makeHost } from '../src/index.js'
+import { Message, view } from './main.js'
+
+export const makeListHost = (acquireRenderer: Effect.Effect<CliRenderer>) =>
+  makeHost({
+    acquireRenderer,
+    view,
+    onKey: (key, controls) => {
+      if (key.ctrl && key.name === 'c') {
+        key.preventDefault()
+        controls.stop()
+      }
+      const message = Match.value(key).pipe(
+        Match.when({ ctrl: true, name: 'r' }, () => Message.PressedReverse()),
+        Match.when({ ctrl: true, name: 'n' }, () => Message.PressedAdd()),
+        Match.when({ ctrl: true, name: 'd' }, () => Message.PressedRemove()),
+        Match.when({ name: 'tab' }, () => Message.PressedNext()),
+        Match.orElse(() => undefined),
+      )
+      if (message) {
+        key.preventDefault()
+        controls.dispatch(message)
+      }
+    },
+  })

@@ -115,6 +115,9 @@
     },
     "internal/opentui-counter": {
       "entry": ["src/**/*.test.ts"]
+    },
+    "internal/foldkit-opentui": {
+      "entry": ["src/**/*.test.ts"]
     }
   },
   "ignore": ["**/*.css", "packages/website/public/**"],
