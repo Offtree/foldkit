@@ -1,5 +1,23 @@
 # create-foldkit-app
 
+## 0.34.0
+
+### Minor Changes
+
+- [#1310](https://github.com/foldkit/foldkit/pull/1310) [`e083c60`](https://github.com/foldkit/foldkit/commit/e083c601b1018c3682dabbd851762a3948ff57f5) Thanks [@filipfalcon](https://github.com/filipfalcon)! - Make the Foldkit server a Web `fetch` handler.
+
+  `ssr.build` no longer takes `entry` pointing at a Node HTTP process or a custom Worker. One `vite build` emits `dist/server/fetch.js` whose default export is `{ fetch }`. Node and Workers both run that module. `handleRequest` in `foldkit/experimental/server` is the shared implementation.
+
+  When another plugin owns the `ssr` environment (workerd), Foldkit still stands down in dev. With `ssr.build` set it stays quiet, because production still needs `ssr.serverEntry`.
+
+  **Migration:** drop `ssr.build.entry` and keep `ssr.serverEntry`. Your Node host is no longer built by `vite build`. Replace it with a script that serves `dist/client` and falls through to `dist/server/fetch.js`, using the SSR example's `scripts/serve.ts` as the reference, and start with `node scripts/serve.ts` instead of `node dist/server/main.js`. A host that imported `dist/server/entry.server.js` now imports `dist/server/fetch.js`, which still exports `renderPage`. A Cloudflare Worker can default-export `fetch.js` directly. `foldkit.build.json` records `fetch.js` as `serverEntry`. The handler trusts `Request.url` as the platform constructed it; a Node adapter resolves the raw request target against its configured origin before calling `fetch`, as `scripts/serve.ts` does.
+
+### Patch Changes
+
+- [#651](https://github.com/foldkit/foldkit/pull/651) [`b950c05`](https://github.com/foldkit/foldkit/commit/b950c054bbe3ffafd85cbca21aa817c5f4c45f44) Thanks [@devinjameson](https://github.com/devinjameson)! - Describe the bundled Vite plugin as state-preserving live reload rather than hot reloading in the README.
+
+- [#651](https://github.com/foldkit/foldkit/pull/651) [`b950c05`](https://github.com/foldkit/foldkit/commit/b950c054bbe3ffafd85cbca21aa817c5f4c45f44) Thanks [@devinjameson](https://github.com/devinjameson)! - Pin `@effect/platform-node-shared` in generated SSR projects to the Effect version they use so fresh installs do not resolve an incompatible newer prerelease.
+
 ## 0.33.0
 
 ### Minor Changes
