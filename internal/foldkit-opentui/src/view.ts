@@ -21,6 +21,18 @@ export const createView = <Message>() => {
         (value): value is () => Message => typeof value === 'function',
       ),
     ),
+    onSubmit: Schema.optional(
+      Schema.declare<() => Message>(
+        (value): value is () => Message => typeof value === 'function',
+      ),
+    ),
+  })
+  const Button = taggedStruct('Button', {
+    key,
+    label: Schema.String,
+    onPress: Schema.declare<() => Message>(
+      (value): value is () => Message => typeof value === 'function',
+    ),
   })
   type Box = Readonly<{
     _tag: 'Box'
@@ -29,14 +41,14 @@ export const createView = <Message>() => {
     gap: number
     children: ReadonlyArray<Node>
   }>
-  type Node = typeof Text.Type | typeof Input.Type | Box
+  type Node = typeof Text.Type | typeof Input.Type | typeof Button.Type | Box
   const Box = taggedStruct('Box', {
     key,
     padding: Schema.Number,
     gap: Schema.Number,
     children: Schema.Array(Schema.suspend((): Schema.Codec<Node> => Node)),
   })
-  const Node: Schema.Codec<Node> = Schema.Union([Text, Input, Box])
+  const Node: Schema.Codec<Node> = Schema.Union([Text, Input, Button, Box])
 
   return {
     Node,
@@ -50,8 +62,16 @@ export const createView = <Message>() => {
         placeholder?: string
         onInput: (value: string) => Message
         onFocus?: () => Message
+        onSubmit?: () => Message
       }>,
     ): Node => Input({ isFocused: false, placeholder: '', ...options }),
+    button: (
+      options: Readonly<{
+        key?: string
+        label: string
+        onPress: () => Message
+      }>,
+    ): Node => Button(options),
     box: (
       options: Readonly<{ key?: string; padding?: number; gap?: number }>,
       children: ReadonlyArray<Node> = [],

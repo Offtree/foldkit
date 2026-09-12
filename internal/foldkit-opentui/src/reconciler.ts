@@ -73,7 +73,18 @@ export const createReconciler = <Message>(
           dispatch(mounted.view.onInput(value))
         }
       }
+      const onEnter = (): void => {
+        if (
+          !isCommitting &&
+          !isDisposed &&
+          mounted.view._tag === 'Input' &&
+          mounted.view.onSubmit
+        ) {
+          dispatch(mounted.view.onSubmit())
+        }
+      }
       renderable.on('input', onInput)
+      renderable.on('enter', onEnter)
       renderable.onMouseDown = event => {
         if (event.button === MouseButton.LEFT) {
           // NOTE: OpenTUI applies mouse autofocus after dispatch. Prevent it
@@ -91,6 +102,28 @@ export const createReconciler = <Message>(
       }
       mounted.release = () => {
         renderable.off('input', onInput)
+        renderable.off('enter', onEnter)
+        renderable.onMouseDown = undefined
+      }
+    }
+    if (view._tag === 'Button' && renderable instanceof BoxRenderable) {
+      const label = new TextRenderable(renderer, {
+        content: view.label,
+        selectable: false,
+      })
+      renderable.add(label)
+      renderable.onMouseDown = event => {
+        if (
+          event.button === MouseButton.LEFT &&
+          !isCommitting &&
+          !isDisposed &&
+          mounted.view._tag === 'Button'
+        ) {
+          event.preventDefault()
+          dispatch(mounted.view.onPress())
+        }
+      }
+      mounted.release = () => {
         renderable.onMouseDown = undefined
       }
     }
@@ -102,8 +135,15 @@ export const createReconciler = <Message>(
   ): Renderable => {
     if (view._tag === 'Text') {
       return new TextRenderable(renderer, { content: view.content })
-    } else {
+    } else if (view._tag === 'Input') {
       return new InputRenderable(renderer, { value: view.value, width: '100%' })
+    } else if (view._tag === 'Button') {
+      return new BoxRenderable(renderer, {
+        border: true,
+        alignSelf: 'flex-start',
+      })
+    } else {
+      return view satisfies never
     }
   }
 
@@ -156,6 +196,18 @@ export const createReconciler = <Message>(
           mounted.renderable.value = view.value
         }
         mounted.renderable.placeholder = view.placeholder
+      }
+      if (
+        view._tag === 'Button' &&
+        mounted.renderable instanceof BoxRenderable
+      ) {
+        const maybeLabel = Array.head(mounted.renderable.getChildren())
+        if (Option.isSome(maybeLabel)) {
+          const label = maybeLabel.value
+          if (label instanceof TextRenderable) {
+            label.content = view.label
+          }
+        }
       }
       return mounted
     })

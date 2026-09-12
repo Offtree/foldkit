@@ -31,7 +31,7 @@ A Foldkit program can own the whole page or run as a widget inside an existing a
 
 For this fork's terminal runtime experiment, see the [OpenTUI counter](internal/opentui-counter/README.md) and [experimental host contract](packages/foldkit/src/experimental/runtime/README.md). The counter uses the same Model transition and Command executor as the browser runtime, with an Effect-scoped OpenTUI host.
 
-The [declarative OpenTUI adapter](internal/foldkit-opentui/README.md) adds Schema-backed boxes, text, and controlled inputs with keyed reconciliation. Its editable-list example preserves focus and cursor position when items move.
+The [declarative OpenTUI adapter](internal/foldkit-opentui/README.md) adds Schema-backed boxes, text, controlled inputs, and mouse-activated buttons with keyed reconciliation. Its editable-list example preserves focus and cursor position when items move, and its sign-up form exercises focus, validation, and submission.
 
 `create-foldkit-app` scaffolds a complete setup with Tailwind, TypeScript, [Oxlint](https://foldkit.dev/tooling/oxlint-plugin), Oxfmt, and the Vite plugin for state-preserving live reload. Pick a rendering mode (browser-only SPA, static generation, or server rendering) and, for a SPA, the example to start from.
 
