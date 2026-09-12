@@ -1,5 +1,4 @@
 import {
-  Array,
   Duration,
   Effect,
   Exit,
@@ -32,6 +31,7 @@ import { deepFreeze } from './deepFreeze.js'
 import type { DevToolsConfig } from './devToolsConfig.js'
 import { makeDevToolsIntegration } from './devToolsIntegration.js'
 import { createDuplicateIdScanner } from './duplicateIdScanner.js'
+import { makeExecution } from './execution.js'
 import {
   type HostConnector,
   type PortChannelsBundle,
@@ -54,25 +54,13 @@ import {
   preserveScrollPosition,
   restorePreservedScrollPosition,
 } from './scrollPreservation.js'
-import {
-  type SlowConfig,
-  type SlowUpdateContext,
-  __resolveSlowConfig,
-  measureSlowPhase,
-  reportSlowPhase,
-} from './slowPhase.js'
+import { type SlowConfig, __resolveSlowConfig } from './slowPhase.js'
 import { forkSubscriptionFibers } from './subscriptionFibers.js'
 import {
   type ViewTransitionConfig,
   __resolveStartViewTransition,
 } from './viewTransition.js'
 import { type Visibility, isVisible } from './visibility.js'
-
-type AnyCommand<T, E = never, R = never> = {
-  readonly name: string
-  readonly args?: Record<string, unknown>
-  readonly effect: Effect.Effect<T, E, R>
-}
 
 /** Full runtime configuration including Model Schema, Flags, init, update, view, and optional routing/stream config. */
 export type RuntimeConfig<
@@ -539,7 +527,7 @@ export const makeRuntime = <
 
         const status = makeRuntimeStatus()
 
-        // NOTE: `processMessagePlain` and `crashWith` are defined further
+        // NOTE: `execution` and `crashWith` are defined further
         // down, so they are wrapped here instead of passed by reference. The
         // queue has to exist before the navigation listeners attach below,
         // and reading a `const` before its line has run throws. The type
@@ -549,7 +537,7 @@ export const makeRuntime = <
         const messageQueue: MessageQueue<Message> =
           yield* makeMessageQueue<Message>({
             status,
-            processMessage: message => processMessagePlain(message),
+            processMessage: message => execution.processMessage(message),
             crashWith: (cause, maybeMessage) => crashWith(cause, maybeMessage),
           })
         const { enqueueMessage, enqueueMessageEffect, completeBoot } =
@@ -586,12 +574,6 @@ export const makeRuntime = <
           )
         }
 
-        // NOTE: the Model is plain closure state. `processMessagePlain`
-        // reads and writes it directly, and the render side (the frame, and
-        // `crashWith` inside its `Effect.sync`) reads it synchronously
-        // through `readLiveModel`, so no Ref is needed.
-        let liveModel: Model = initModel
-
         // NOTE: the runtime context for OnMount forking and Command forking
         // is captured once here; it is constant for the lifetime of the
         // runtime.
@@ -620,108 +602,32 @@ export const makeRuntime = <
           maybeResolvedViewTransition,
           commitNotifier,
           runtimeContext,
-          readLiveModel: () => liveModel,
+          readLiveModel: (): Model => execution.readModel(),
           messageQueue,
           devToolsIntegration,
         })
 
-        // NOTE: the fork is deferred one microtask so a Command's Effect
-        // never begins on the dispatching stack. Commands are facts from
-        // outside the update loop; their results always arrive
-        // asynchronously, exactly as under the old queue. The fork runs
-        // through `Effect.runForkWith` (which starts its fiber
-        // synchronously, so the child is registered in `runtimeScope`
-        // before this callback returns), not `Effect.runSyncWith`:
-        // `runSyncWith` injects a temporary synchronous scheduler into the
-        // fiber context, the child would inherit it, and every later yield
-        // in the Command (for example, an op-budget suspension, or a
-        // Stream step) would reschedule through clamped `setTimeout`
-        // instead of the browser microtask scheduler carried by
-        // `runtimeContext`.
-        const forkCommand = (
-          command: AnyCommand<
-            Message,
-            never,
-            Resources | ManagedResourceServices
-          >,
-          message: Option.Option<Message>,
-        ): void => {
-          queueMicrotask(() => {
-            // NOTE: `isCrashed` as well as `isRuntimeDisposed`. A crash is
-            // terminal but does not dispose the runtime, and a Command forked
-            // by a Message processed just before the crashing Message sits in
-            // this microtask when the crash view paints. Without the crash
-            // check its effect would run behind the crash view, contradicting
-            // the crash-terminality contract. `crashWith` sets `isCrashed`
-            // synchronously, so it is already set by the time this runs.
-            if (status.isRuntimeDisposed || status.isCrashed) {
-              return
-            }
-            Effect.runForkWith(runtimeContext)(
-              Effect.forkIn(runtimeScope)(
-                command.effect.pipe(
-                  Effect.withSpan(command.name, {
-                    attributes: command.args ?? {},
-                  }),
-                  provideAllResources,
-                  Effect.flatMap(enqueueMessageEffect),
-                  Effect.catchCause(cause => crashWith(cause, message)),
-                ),
-              ),
-            )
-          })
-        }
-
-        const processMessagePlain = (message: Message): void => {
-          const currentModel = liveModel
-
-          const [messageUpdate, maybeUpdateDuration] = measureSlowPhase(
-            maybeSlowUpdate,
-            () => update(currentModel, message),
-          )
-          const nextModelRaw = messageUpdate.model
-          const commands = messageUpdate.commands ?? []
-          const nextModel = maybeFreezeModel(nextModelRaw)
-
-          reportSlowPhase<SlowUpdateContext<Model, Message>>(
-            maybeSlowUpdate,
-            maybeUpdateDuration,
-            (durationMs, thresholdMs) => ({
-              _tag: 'Update',
-              previousModel: currentModel,
-              nextModel,
-              message,
-              durationMs,
-              thresholdMs,
-            }),
-          )
-
-          if (currentModel !== nextModel) {
-            liveModel = nextModel
+        const execution = makeExecution({
+          initModel,
+          update,
+          prepareModel: maybeFreezeModel,
+          maybeSlowUpdate,
+          status,
+          runtimeScope,
+          runtimeContext,
+          provideAllResources,
+          enqueueMessageEffect,
+          crashWith,
+          onModelChanged: (nextModel, message) => {
             setLastDirtyMessage(message)
             PubSub.publishUnsafe(modelPubSub, nextModel)
             if (import.meta.hot) {
               Effect.runSync(schedulePreserveModel(nextModel))
             }
             scheduleRenderFrame()
-          }
-
-          if (!Array.isReadonlyArrayEmpty(commands)) {
-            for (const command of commands) {
-              forkCommand(
-                /* eslint-disable-next-line @typescript-eslint/consistent-type-assertions */
-                command as AnyCommand<
-                  Message,
-                  never,
-                  Resources | ManagedResourceServices
-                >,
-                Option.some(message),
-              )
-            }
-          }
-
-          recordMessage(message, currentModel, nextModel, commands)
-        }
+          },
+          recordMessage,
+        })
 
         yield* installDevToolsStore(devToolsRenderBridge)
 
@@ -787,20 +693,10 @@ export const makeRuntime = <
         // isBootComplete barrier this guarantees no Command result (or any
         // other Message) is processed until the init render has painted
         // initModel and every boot subsystem (DevTools store, Subscriptions,
-        // ManagedResources, ports) is attached. forkCommand also defers each
+        // ManagedResources, ports) is attached. runCommands also defers each
         // start by a microtask, so a fully synchronous init Command still
         // delivers its result asynchronously.
-        for (const command of initCommands) {
-          forkCommand(
-            /* eslint-disable-next-line @typescript-eslint/consistent-type-assertions */
-            command as AnyCommand<
-              Message,
-              never,
-              Resources | ManagedResourceServices
-            >,
-            Option.none(),
-          )
-        }
+        execution.runCommands(initCommands, Option.none())
 
         completeBoot()
 

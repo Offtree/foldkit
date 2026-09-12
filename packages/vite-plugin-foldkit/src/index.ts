@@ -133,6 +133,7 @@ const FORCE_INCLUDED_EFFECT_NAMESPACES: ReadonlyArray<string> = [
   'effect/Context',
   'effect/Data',
   'effect/DateTime',
+  'effect/Deferred',
   'effect/Duration',
   'effect/Effect',
   'effect/Equal',

@@ -51,6 +51,10 @@
       "types": "./dist/experimental/server/public.d.ts",
       "import": "./dist/experimental/server/public.js"
     },
+    "./experimental/runtime": {
+      "types": "./dist/experimental/runtime/public.d.ts",
+      "import": "./dist/experimental/runtime/public.js"
+    },
     "./html": {
       "types": "./dist/html/public.d.ts",
       "import": "./dist/html/public.js"

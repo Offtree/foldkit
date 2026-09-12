@@ -6,7 +6,7 @@ import {
   Record,
   Ref,
   Schema,
-  type Scope,
+  Scope,
   Stream,
   pipe,
 } from 'effect'
@@ -87,7 +87,12 @@ export const forkSubscriptionFibers = <Model, Message, Services>({
 
           const latestDependenciesRef = yield* Ref.make(initDependencies)
 
-          const modelChangesStream = Stream.fromPubSub(modelPubSub).pipe(
+          // NOTE: subscribe before forking. A host may dispatch as soon as
+          // boot completes, before the child fiber gets its first turn.
+          const modelChanges = yield* PubSub.subscribe(modelPubSub).pipe(
+            Effect.provideService(Scope.Scope, runtimeScope),
+          )
+          const modelChangesStream = Stream.fromSubscription(modelChanges).pipe(
             // NOTE: Ref.set runs upstream of Stream.changesWith on
             // every model change, so readDependencies() returns
             // current values even when the equivalence filter

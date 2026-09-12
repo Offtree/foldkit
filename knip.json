@@ -21,6 +21,7 @@
         "src/brand/public.ts",
         "src/experimental/public.ts",
         "src/experimental/machine/public.ts",
+        "src/experimental/runtime/public.ts",
         "src/experimental/server/public.ts",
         "src/html/public.ts",
         "src/devTools/public.ts",
@@ -111,6 +112,9 @@
     "internal/performance-harness": {
       "entry": ["src/main.ts"],
       "ignoreDependencies": ["tailwindcss"]
+    },
+    "internal/opentui-counter": {
+      "entry": ["src/**/*.test.ts"]
     }
   },
   "ignore": ["**/*.css", "packages/website/public/**"],
