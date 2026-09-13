@@ -1,4 +1,5 @@
 import { Array, Option } from 'effect'
+import { viewIdentityKey } from 'foldkit/brand'
 
 import {
   BoxRenderable,
@@ -166,6 +167,7 @@ export const createReconciler = <Message>(
       const mounted =
         candidate &&
         candidate.view.key === view.key &&
+        candidate.view[viewIdentityKey] === view[viewIdentityKey] &&
         candidate.view._tag === view._tag
           ? candidate
           : mount(view, parent)

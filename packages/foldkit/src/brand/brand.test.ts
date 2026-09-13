@@ -10,7 +10,7 @@ import {
 import { MountTracker } from '../mount/index.js'
 import { Dispatch } from '../runtime/index.js'
 import { h } from '../snabbdom/index.js'
-import { brandViewResult } from './brand.js'
+import { brandViewResult, viewIdentityKey } from './brand.js'
 
 describe('brandViewResult', () => {
   it('stamps identity on a bare vnode and returns the same reference', () => {
@@ -50,6 +50,41 @@ describe('brandViewResult', () => {
     expect(result).toBe(elements)
     expect(first.identity).toBe('row')
     expect(second.identity).toBe('row')
+  })
+
+  it('stamps non-DOM adapter nodes that opt into view identity', () => {
+    const node = { [viewIdentityKey]: undefined, content: 'terminal' }
+
+    const result = brandViewResult(node, 'terminal/view')
+
+    expect(result).toBe(node)
+    expect(node[viewIdentityKey]).toBe('terminal/view')
+    brandViewResult(node, 'other/view')
+    expect(node[viewIdentityKey]).toBe('terminal/view')
+  })
+
+  it('preserves adapter descriptors and passes through frozen targets', () => {
+    const writable = Object.defineProperty(
+      { [viewIdentityKey]: undefined },
+      viewIdentityKey,
+      {
+        configurable: false,
+        enumerable: false,
+        writable: true,
+      },
+    )
+    const frozen = Object.freeze({ [viewIdentityKey]: undefined })
+
+    expect(brandViewResult(writable, 'terminal/view')).toBe(writable)
+    expect(writable[viewIdentityKey]).toBe('terminal/view')
+    expect(Object.getOwnPropertyDescriptor(writable, viewIdentityKey)).toEqual({
+      configurable: false,
+      enumerable: false,
+      value: 'terminal/view',
+      writable: true,
+    })
+    expect(() => brandViewResult(frozen, 'terminal/view')).not.toThrow()
+    expect(frozen[viewIdentityKey]).toBeUndefined()
   })
 
   it('passes through strings, null, and non-vnode objects untouched', () => {

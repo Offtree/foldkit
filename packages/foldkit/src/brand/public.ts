@@ -1,1 +1,1 @@
-export { brandViewResult } from './index.js'
+export { brandViewResult, viewIdentityKey } from './index.js'

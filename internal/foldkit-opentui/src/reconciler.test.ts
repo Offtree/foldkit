@@ -1,5 +1,6 @@
 import { expect, test } from 'bun:test'
 import { Array, Option, Schema } from 'effect'
+import { brandViewResult } from 'foldkit/brand'
 
 import { InputRenderable, type Renderable } from '@opentui/core'
 import { createTestRenderer } from '@opentui/core/testing'
@@ -166,6 +167,59 @@ test('same key with a new kind replaces the native node; omitted props reset to 
     expect(input.listenerCount('input')).toBe(0)
     await setup.renderOnce()
     expect(setup.captureCharFrame().startsWith('Replaced')).toBe(true)
+  } finally {
+    tree.dispose()
+    setup.renderer.destroy()
+  }
+})
+
+test('view-function identity replaces same-kind unkeyed branches', async () => {
+  const setup = await createTestRenderer({
+    width: 40,
+    height: 12,
+    useThread: false,
+  })
+  const tree = createReconciler<Message>(setup.renderer, () => {})
+  try {
+    const summary = brandViewResult(
+      h.input({
+        value: 'Draft',
+        onInput: value => Message.make({ id: 'summary', value }),
+      }),
+      'app/view#summary',
+    )
+    tree.commit(h.box({}, [summary]))
+    const summaryInput = findInput(setup.renderer.root, 'Draft')
+    summaryInput.cursorOffset = 2
+
+    tree.commit(
+      h.box({}, [
+        brandViewResult(
+          h.input({
+            value: 'Draft',
+            onInput: value => Message.make({ id: 'summary', value }),
+          }),
+          'app/view#summary',
+        ),
+      ]),
+    )
+    expect(findInput(setup.renderer.root, 'Draft')).toBe(summaryInput)
+    expect(summaryInput.cursorOffset).toBe(2)
+
+    tree.commit(
+      h.box({}, [
+        brandViewResult(
+          h.input({
+            value: 'Draft',
+            onInput: value => Message.make({ id: 'editor', value }),
+          }),
+          'app/view#editor',
+        ),
+      ]),
+    )
+    expect(findInput(setup.renderer.root, 'Draft')).not.toBe(summaryInput)
+    expect(summaryInput.isDestroyed).toBe(true)
+    expect(summaryInput.listenerCount('input')).toBe(0)
   } finally {
     tree.dispose()
     setup.renderer.destroy()

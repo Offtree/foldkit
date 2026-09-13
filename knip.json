@@ -117,7 +117,7 @@
       "entry": ["src/**/*.test.ts"]
     },
     "internal/foldkit-opentui": {
-      "entry": ["src/**/*.test.ts"]
+      "entry": ["src/**/*.test.ts", "viewIdentityPlugin.ts"]
     }
   },
   "ignore": ["**/*.css", "packages/website/public/**"],
